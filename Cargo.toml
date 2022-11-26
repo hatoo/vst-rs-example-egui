@@ -1,0 +1,17 @@
+[package]
+edition = "2021"
+name = "whisper"
+version = "0.1.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+eframe = {path = "../egui/crates/eframe"}
+rand = "0.8"
+tracing = {version = "0.1", default-features = false, features = ["std"]}
+tracing-subscriber = "0.3"
+vst = "0.3"
+
+[lib]
+crate-type = ["cdylib"]
+name = "whisper"
