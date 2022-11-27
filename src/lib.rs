@@ -1,6 +1,5 @@
 use eframe::egui;
 use rand::random;
-use tracing::metadata::LevelFilter;
 use vst::api::{Events, Supported};
 use vst::buffer::AudioBuffer;
 use vst::editor::Editor;
@@ -108,10 +107,12 @@ impl Plugin for Whisper {
         }
     }
 
-    fn new(host: vst::prelude::HostCallback) -> Self
+    fn new(_host: vst::prelude::HostCallback) -> Self
     where
         Self: Sized,
     {
+        /*
+        use tracing::metadata::LevelFilter;
         let file = std::fs::File::create(
             "C:/Users/hato2/Desktop/vst-rs-example-egui/target/debug/log.txt",
         )
@@ -121,6 +122,7 @@ impl Plugin for Whisper {
             .with_max_level(LevelFilter::TRACE)
             .with_writer(std::sync::Arc::new(file))
             .init();
+        */
         Whisper { notes: 0 }
     }
 
@@ -207,7 +209,7 @@ impl Default for MyApp {
 }
 
 impl eframe::App for MyApp {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("My egui Application");
             ui.horizontal(|ui| {
