@@ -1,7 +1,4 @@
-use std::io::Write;
-
 use eframe::egui;
-use eframe::epaint::{Pos2, Vec2};
 use rand::random;
 use tracing::metadata::LevelFilter;
 use vst::api::{Events, Supported};
@@ -135,7 +132,7 @@ impl Plugin for Whisper {
 vst::plugin_main!(Whisper);
 
 #[derive(Default)]
-struct VstGui(Option<eframe::Idle>);
+struct VstGui(Option<eframe::WgpuIdle>);
 
 impl VstGui {
     fn close(&mut self) {
@@ -163,7 +160,7 @@ impl Editor for VstGui {
         options.decorated = false;
         options.resizable = false;
 
-        let idle = eframe::idle_native(
+        let idle = eframe::idle_wgpu(
             "My egui App",
             options,
             Box::new(|_cc| Box::new(MyApp::default())),
