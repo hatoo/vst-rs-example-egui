@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use eframe::egui;
 use rand::random;
 use vst::api::{Events, Supported};
@@ -5,11 +7,26 @@ use vst::buffer::AudioBuffer;
 use vst::editor::Editor;
 use vst::event::Event;
 use vst::plugin::{CanDo, Category, Info, Plugin};
+use vst::prelude::*;
 
 #[derive(Default)]
 struct Whisper {
     // Added a counter in our plugin struct.
     notes: u8,
+    params: Arc<WhisperParameters>,
+}
+
+struct WhisperParameters {
+    // The plugin's state consists of a single parameter: amplitude.
+    amplitude: AtomicFloat,
+}
+
+impl Default for WhisperParameters {
+    fn default() -> Self {
+        Self {
+            amplitude: AtomicFloat::new(0.5),
+        }
+    }
 }
 
 // We're implementing a trait `Plugin` that does all the VST-y stuff for us.
@@ -31,9 +48,14 @@ impl Plugin for Whisper {
             // Set our category
             category: Category::Synth,
 
+            parameters: 1,
             // We don't care about other stuff, and it can stay default.
             ..Default::default()
         }
+    }
+
+    fn get_parameter_object(&mut self) -> Arc<dyn PluginParameters> {
+        Arc::clone(&self.params) as Arc<dyn PluginParameters>
     }
 
     // Here's the function that allows us to receive events
@@ -65,6 +87,8 @@ impl Plugin for Whisper {
     }
 
     fn process(&mut self, buffer: &mut AudioBuffer<f32>) {
+        let amplitude = self.params.amplitude.get();
+
         // `buffer.split()` gives us a tuple containing the
         // input and output buffers.  We only care about the
         // output, so we can ignore the input by using `_`.
@@ -90,7 +114,7 @@ impl Plugin for Whisper {
             for output_sample in output_channel {
                 // For every sample, we want to generate a random value
                 // from -1.0 to 1.0.
-                *output_sample = (random::<f32>() - 0.5f32) * 2f32;
+                *output_sample = amplitude * (random::<f32>() - 0.5f32) * 2f32;
             }
         }
     }
@@ -123,22 +147,64 @@ impl Plugin for Whisper {
             .with_writer(std::sync::Arc::new(file))
             .init();
         */
-        Whisper { notes: 0 }
+        Self::default()
     }
 
     fn get_editor(&mut self) -> Option<Box<dyn Editor>> {
-        Some(Box::new(VstGui::default()))
+        Some(Box::new(VstGui {
+            params: self.params.clone(),
+            gui: None,
+        }))
+    }
+}
+
+impl PluginParameters for WhisperParameters {
+    // the `get_parameter` function reads the value of a parameter.
+    fn get_parameter(&self, index: i32) -> f32 {
+        match index {
+            0 => self.amplitude.get(),
+            _ => 0.0,
+        }
+    }
+
+    // the `set_parameter` function sets the value of a parameter.
+    fn set_parameter(&self, index: i32, val: f32) {
+        #[allow(clippy::single_match)]
+        match index {
+            0 => self.amplitude.set(val),
+            _ => (),
+        }
+    }
+
+    // This is what will display underneath our control.  We can
+    // format it into a string that makes the most since.
+    fn get_parameter_text(&self, index: i32) -> String {
+        match index {
+            0 => format!("{:.2}", self.amplitude.get()),
+            _ => "".to_string(),
+        }
+    }
+
+    // This shows the control's name.
+    fn get_parameter_name(&self, index: i32) -> String {
+        match index {
+            0 => "Amplitude",
+            _ => "",
+        }
+        .to_string()
     }
 }
 
 vst::plugin_main!(Whisper);
 
-#[derive(Default)]
-struct VstGui(Option<eframe::WgpuIdle>);
+struct VstGui {
+    params: Arc<WhisperParameters>,
+    gui: Option<eframe::WgpuIdle>,
+}
 
 impl VstGui {
     fn close(&mut self) {
-        if let Some(mut idle) = self.0.take() {
+        if let Some(mut idle) = self.gui.take() {
             tracing::debug!("close");
             idle.close();
         }
@@ -162,26 +228,27 @@ impl Editor for VstGui {
         options.decorated = false;
         options.resizable = false;
 
+        let params = Arc::clone(&self.params);
         let idle = eframe::idle_wgpu(
             "My egui App",
             options,
-            Box::new(|_cc| Box::new(MyApp::default())),
+            Box::new(|_cc| Box::new(MyApp { params })),
         );
 
-        self.0 = Some(idle);
+        self.gui = Some(idle);
 
         true
     }
 
     fn idle(&mut self) {
         let mut exit = false;
-        if let Some(idle) = self.0.as_mut() {
+        if let Some(idle) = self.gui.as_mut() {
             tracing::debug!("idle start");
             exit = idle.idle();
             tracing::debug!("idle end");
         }
         if exit {
-            self.0 = None;
+            self.gui = None;
         }
     }
 
@@ -190,37 +257,21 @@ impl Editor for VstGui {
     }
 
     fn is_open(&mut self) -> bool {
-        self.0.is_some()
+        self.gui.is_some()
     }
 }
 
 struct MyApp {
-    name: String,
-    age: u32,
-}
-
-impl Default for MyApp {
-    fn default() -> Self {
-        Self {
-            name: "Arthur".to_owned(),
-            age: 42,
-        }
-    }
+    params: Arc<WhisperParameters>,
 }
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("My egui Application");
-            ui.horizontal(|ui| {
-                ui.label("Your name: ");
-                ui.text_edit_singleline(&mut self.name);
-            });
-            ui.add(egui::Slider::new(&mut self.age, 0..=120).text("age"));
-            if ui.button("Click each year").clicked() {
-                self.age += 1;
-            }
-            ui.label(format!("Hello '{}', age {}", self.name, self.age));
+            let mut amplitude = self.params.amplitude.get();
+            ui.add(egui::Slider::new(&mut amplitude, 0.0..=1.0).text("amplitude"));
+            self.params.amplitude.set(amplitude);
         });
     }
 }
