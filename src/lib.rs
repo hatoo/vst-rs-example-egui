@@ -269,9 +269,16 @@ impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("My egui Application");
-            let mut amplitude = self.params.amplitude.get();
-            ui.add(egui::Slider::new(&mut amplitude, 0.0..=1.0).text("amplitude"));
-            self.params.amplitude.set(amplitude);
+            ui.add(
+                egui::Slider::from_get_set(0.0..=1.0, |value| {
+                    if let Some(value) = value {
+                        self.params.amplitude.set(value as _)
+                    }
+                    self.params.amplitude.get() as _
+                })
+                .show_value(true)
+                .text("Amplitude"),
+            );
         });
     }
 }
